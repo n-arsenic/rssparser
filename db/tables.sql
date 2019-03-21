@@ -1,6 +1,6 @@
-CREATE TYPE status_type AS ENUM ('wait', 'error', 'success', 'new'); 
+DROP TYPE IF EXISTS status_type; 
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
  	id         serial        PRIMARY KEY,
 	name       VARCHAR (355) NOT NULL,
 	password   VARCHAR (50)  NOT NULL,
@@ -10,18 +10,17 @@ CREATE TABLE users (
 	UNIQUE (name)
 );
 
-
-CREATE TABLE channels(
+CREATE TABLE IF NOT EXISTS channels(
 	id          serial      PRIMARY KEY,
 	rss_url     TEXT        NOT NULL,
 	description TEXT, 
 	pub_date    TIMESTAMP   NOT NULL,
-	parsed_at   TIMESTAMP,
-	status      status_type,
+	created_at  TIMESTAMP   NOT NULL,
 
 	UNIQUE (rss_url)
 );
-CREATE TABLE user_channels(
+
+CREATE TABLE IF NOT EXISTS user_channels(
 	user_id    INTEGER NOT NULL,
 	channel_id INTEGER NOT NULL,
 
@@ -31,7 +30,7 @@ CREATE TABLE user_channels(
 	FOREIGN KEY (channel_id)       REFERENCES channels(id)    ON DELETE CASCADE
 );
 
-CREATE TABLE channel_content(
+CREATE TABLE IF NOT EXISTS channel_content(
 	channel_id  INTEGER   NOT NULL,
 	link        TEXT,
 	title       TEXT,
@@ -42,4 +41,19 @@ CREATE TABLE channel_content(
 
 	FOREIGN KEY (channel_id)       REFERENCES channels(id)    ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS scheduler(
+	channel_id  INTEGER     NOT NULL,
+	rss_url     TEXT        NOT NULL,
+	finish      TIMESTAMP,
+	start       TIMESTAMP,
+	status      VARCHAR(50),
+	
+	UNIQUE (rss_url),
+
+	PRIMARY KEY (channel_id),
+
+	FOREIGN KEY (channel_id)       REFERENCES channels(id)    ON DELETE CASCADE
+);
+
 
