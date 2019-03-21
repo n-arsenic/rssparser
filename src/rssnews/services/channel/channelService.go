@@ -20,7 +20,7 @@ func (channelService *Service) Create(rq *CreateRequest) *CreateResponse {
 	var _err error
 
 	chanl.Rss_url = rq.Url
-
+	//check unic rows
 	selQuery := sq.Select("id").
 		From("channels").
 		Where("rss_url = ?", chanl.Rss_url).
@@ -32,12 +32,10 @@ func (channelService *Service) Create(rq *CreateRequest) *CreateResponse {
 
 	if _err == sql.ErrNoRows {
 		query := sq.
-			Insert("channels").Columns("rss_url", "status", "created_at").
-			Values(
-				chanl.Rss_url,
-				chanl.GetNewStatus(),
-				chanl.GetCreatedAt(),
-			).Suffix("RETURNING \"id\"").
+			Insert("channels").
+			Columns("rss_url").
+			Values(chanl.Rss_url).
+			Suffix("RETURNING \"id\"").
 			RunWith(services.Postgre.Db).
 			PlaceholderFormat(sq.Dollar)
 
@@ -55,7 +53,8 @@ func (channelService *Service) Create(rq *CreateRequest) *CreateResponse {
 	}
 
 	_, _err = sq.
-		Insert("user_channels").Columns("channel_id", "user_id").
+		Insert("user_channels").
+		Columns("channel_id", "user_id").
 		Values(
 			chanl.Id,
 			rq.User_id,
