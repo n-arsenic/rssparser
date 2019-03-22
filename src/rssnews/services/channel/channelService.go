@@ -5,11 +5,39 @@ import (
 	"fmt"
 	sq "github.com/Masterminds/squirrel"
 	"github.com/pkg/errors"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 	"rssnews/entity"
 	"rssnews/services"
+	//	"log"
+	pbf "rssnews/protonotify"
+)
+
+const (
+	host = "localhost:50051"
 )
 
 type Service struct{}
+
+func test() {
+	conn, err := grpc.Dial(host, grpc.WithInsecure())
+	if err != nil {
+		//log.Fatalf("Couldn't connect: %v", err)
+		fmt.Printf("Couldn't connect: %v", err)
+
+	}
+	defer conn.Close()
+	fmt.Println("init client")
+	asapcli := pbf.NewAsapWorkerClient(conn)
+	fmt.Println("SEND request to server")
+
+	resp, err := asapcli.InsertNotify(context.Background(), &pbf.Request{Id: 2, Url: "http://ttttt.tt"})
+	if err != nil {
+		//	log.Fatalf("could not send notify: %v", err)
+		fmt.Printf("could not send notify: %v", err)
+	}
+	fmt.Printf("Get: %s\n", resp.Received)
+}
 
 func (channelService *Service) Create(rq *CreateRequest) *CreateResponse {
 	defer services.Postgre.Close()
@@ -72,6 +100,9 @@ func (channelService *Service) Create(rq *CreateRequest) *CreateResponse {
 	}
 
 	response.Id = chanl.Id
+
+	test()
+
 	return response
 
 }

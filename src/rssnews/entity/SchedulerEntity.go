@@ -1,9 +1,7 @@
 package entity
 
 import (
-	"database/sql"
 	"github.com/lib/pq"
-	"time"
 )
 
 var StatusType = map[byte]string{
@@ -21,22 +19,22 @@ type Scheduler struct {
 	Start      pq.NullTime
 }
 
-func (ch *Channel) GetNewStatus() string {
+func (sh *Scheduler) GetNewStatus() string {
 	return StatusType['n']
 }
 
-func (ch *Channel) GetWorkStatus() string {
+func (sh *Scheduler) GetWorkStatus() string {
 	return StatusType['w']
 }
 
-func (ch *Channel) GetErrorStatus() string {
+func (sh *Scheduler) GetErrorStatus() string {
 	return StatusType['e']
 }
 
-func (ch *Channel) GetSuccessStatus() string {
+func (sh *Scheduler) GetSuccessStatus() string {
 	return StatusType['s']
 }
 
-func (ch *Channel) SetNewStatus(ent *Channel, status string) {
-	ent.Status = ch.GetNewStatus()
+func (sh *Scheduler) SetNewStatus(ent *Scheduler, status string) {
+	ent.Status = sh.GetNewStatus()
 }

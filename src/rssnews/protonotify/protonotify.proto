@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package protonotify; 
+
+service AsapWorker {
+  rpc InsertNotify(Request) returns (Response) {}
+}
+
+message Request {
+  int32 id = 1;
+  string url = 2;
+}
+
+message Response {
+  bool received = 1;
+}
