@@ -47,7 +47,9 @@ CREATE TABLE IF NOT EXISTS scheduler(
 	rss_url     TEXT        NOT NULL,
 	finish      TIMESTAMP,
 	start       TIMESTAMP,
+	plan_start  TIMESTAMP,
 	status      VARCHAR(50),
+	message     TEXT,
 	
 	UNIQUE (rss_url),
 

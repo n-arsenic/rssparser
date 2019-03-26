@@ -19,7 +19,7 @@ const (
 
 type Service struct{}
 
-func test() {
+func (channelService *Service) sendNotifyEvent(ent entity.Channel) {
 	conn, err := grpc.Dial(host, grpc.WithInsecure())
 	if err != nil {
 		//log.Fatalf("Couldn't connect: %v", err)
@@ -30,8 +30,9 @@ func test() {
 	fmt.Println("init client")
 	asapcli := pbf.NewAsapWorkerClient(conn)
 	fmt.Println("SEND request to server")
-
-	resp, err := asapcli.InsertNotify(context.Background(), &pbf.Request{Id: 2, Url: "http://ttttt.tt"})
+	//reset connection!!!!! if not reply!
+	//!!!!
+	resp, err := asapcli.InsertNotify(context.Background(), &pbf.Request{Id: int32(ent.Id), Url: ent.Rss_url})
 	if err != nil {
 		//	log.Fatalf("could not send notify: %v", err)
 		fmt.Printf("could not send notify: %v", err)
@@ -43,8 +44,8 @@ func (channelService *Service) Create(rq *CreateRequest) *CreateResponse {
 	defer services.Postgre.Close()
 	services.Postgre.Connect()
 
-	var response *CreateResponse = &CreateResponse{}
-	var chanl = new(entity.Channel)
+	var response *CreateResponse = new(CreateResponse)
+	var chanl = entity.Channel{}
 	var _err error
 
 	chanl.Rss_url = rq.Url
@@ -58,16 +59,17 @@ func (channelService *Service) Create(rq *CreateRequest) *CreateResponse {
 
 	_err = selQuery.Scan(&chanl.Id)
 
+	//убрать селект - инсерт + обработка уникальности - если создано то селект и return
 	if _err == sql.ErrNoRows {
 		query := sq.
 			Insert("channels").
 			Columns("rss_url").
 			Values(chanl.Rss_url).
-			Suffix("RETURNING \"id\"").
+			Suffix("RETURNING \"id\", \"rss_url\"").
 			RunWith(services.Postgre.Db).
 			PlaceholderFormat(sq.Dollar)
 
-		_err = query.QueryRow().Scan(&chanl.Id)
+		_err = query.QueryRow().Scan(&chanl.Id, &chanl.Rss_url)
 
 	}
 
@@ -101,7 +103,7 @@ func (channelService *Service) Create(rq *CreateRequest) *CreateResponse {
 
 	response.Id = chanl.Id
 
-	test()
+	channelService.sendNotifyEvent(chanl)
 
 	return response
 
@@ -189,7 +191,7 @@ func (channelService *Service) ReadOne(rq *ReadOneRequest) *ReadOneResponse {
 		RunWith(services.Postgre.Db).
 		PlaceholderFormat(sq.Dollar).
 		Query()
-
+		//[TODO] if scheduler has error - print it
 	for rows.Next() {
 		var content *entity.ChannelContent = new(entity.ChannelContent)
 

@@ -2,13 +2,13 @@ package entity
 
 import (
 	"github.com/lib/pq"
+	"time"
 )
 
 var StatusType = map[byte]string{
 	'w': "work",
 	'e': "error",
 	's': "success",
-	'n': "new",
 }
 
 type Scheduler struct {
@@ -17,10 +17,8 @@ type Scheduler struct {
 	Status     string
 	Finish     pq.NullTime
 	Start      pq.NullTime
-}
-
-func (sh *Scheduler) GetNewStatus() string {
-	return StatusType['n']
+	Plan_start pq.NullTime
+	Message    string
 }
 
 func (sh *Scheduler) GetWorkStatus() string {
@@ -35,6 +33,20 @@ func (sh *Scheduler) GetSuccessStatus() string {
 	return StatusType['s']
 }
 
-func (sh *Scheduler) SetNewStatus(ent *Scheduler, status string) {
-	ent.Status = sh.GetNewStatus()
+func (sh *Scheduler) SetWorkStatus() {
+	sh.Status = sh.GetWorkStatus()
+}
+
+func (sh *Scheduler) SetErrorStatus() {
+	sh.Status = sh.GetErrorStatus()
+}
+
+func (sh *Scheduler) SetSuccessStatus() {
+	sh.Status = sh.GetSuccessStatus()
+}
+
+func (sh *Scheduler) SetError(mess string) {
+	sh.Status = sh.GetErrorStatus()
+	sh.Message = mess
+	sh.Finish = pq.NullTime{Time: time.Now(), Valid: true}
 }

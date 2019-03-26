@@ -32,6 +32,7 @@ func GetTasks() (tasks []entity.Channel) {
 	return
 }
 
+//check if channel set into scheduler - OUTER JOIN scheduler and channels
 func Start() {
 
 	serv := service.New(service.Config{
@@ -48,7 +49,6 @@ func Start() {
 
 	/*
 		requestChan := make(chan chan entity.Channel)
-
 		for i := 0; i < MAX_ROUTIN; i++ {
 			worker := new(Worker)
 			go worker.Execute(requestChan)

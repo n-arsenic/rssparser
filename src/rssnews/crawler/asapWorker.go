@@ -1,53 +1,52 @@
 package main
 
 import (
-	"log"
-	"net"
-
-	//	"database/sql"
+	//	"encoding/xml"
+	"bytes"
 	"fmt"
-	//	sq "github.com/Masterminds/squirrel"
+	"github.com/lib/pq"
 	"golang.org/x/net/context"
+	"golang.org/x/text/encoding/htmlindex"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
+	"io"
+	"log"
+	"net"
+	"net/http"
 	pbf "rssnews/protonotify"
+	"rssnews/services/scheduler"
+	"strings"
 	"time"
 )
 
 const (
-	port = ":50051"
+	port       = ":50051"
+	MAX_MEMORY = 5 * 1024
 )
 
-type Server struct {
-	Ch chan *pbf.Request
-}
+type (
+	Server struct {
+		Ch chan scheduler.Service
+	}
+
+	Worker struct{}
+)
 
 func (srv *Server) InsertNotify(ctx context.Context, req *pbf.Request) (*pbf.Response, error) {
+
 	fmt.Printf("get notify %v\n", req)
 
-	//time.Sleep(time.Second * 5)
-	/*
-		//write to scheduler if not exists
-		//- надо ли делать селект или обработать ошибку не уникальности?
+	schedulerService := scheduler.Service{}
+	schedulerService.Channel_id = int(req.Id)
+	schedulerService.Rss_url = req.Url
+	schedulerService.Start = pq.NullTime{Time: time.Now(), Valid: true}
+	schedulerService.SetWorkStatus()
 
-		defer services.Postgre.Close()
-		services.Postgre.Connect()
-		var cid int
-		query := sq.
-			Insert("scheduler").
-			Columns("channel_id", "rss_url", "start", "status").
-			Values(req.Id, req.Url, time.Now(), "work").
-			Suffix("RETURNING \"id\"").
-			RunWith(services.Postgre.Db).
-			PlaceholderFormat(sq.Dollar)
-
-		_err = query.QueryRow().Scan(&cid)
-
-		fmt.Printf("%#v", _err)
-	*/
-
-	//send message to buffered channel
-	srv.Ch <- req
+	err := schedulerService.Create()
+	//send message may be buffered? channel
+	if schedulerService.Exists && err == nil {
+		srv.Ch <- schedulerService
+	}
 	return &pbf.Response{Received: true}, nil
 }
 
@@ -58,49 +57,58 @@ func main() {
 	}
 	srv := grpc.NewServer()
 	srvLocal := new(Server)
-	srvLocal.Ch = make(chan *pbf.Request)
+	srvLocal.Ch = make(chan scheduler.Service)
+	worker := new(Worker)
+
+	go worker.Work(srvLocal.Ch)
 
 	pbf.RegisterAsapWorkerServer(srv, srvLocal)
 	reflection.Register(srv)
-	go work(srvLocal.Ch)
 	if err := srv.Serve(lis); err != nil {
+		//[TODO] kill goroutines && close channel
 		log.Fatalf("Failed to serve: %v", err)
 	}
 }
 
-func work(ch chan *pbf.Request) {
+//[TODO] allocate this to another pkg
+func (wr *Worker) Work(ch chan scheduler.Service) {
 	fmt.Println("init work")
+	//	fmt.Printf("v\n", charmap.All)
 	for {
-		//contition for close channel
-		rq := <-ch
-		time.Sleep(time.Second * 10)
-		fmt.Println("I am!!!!!", rq)
+		//condition for close channel
+		schedule := <-ch
+		resp, err := http.Get(schedule.Rss_url) //write to temporary file - bounds of memory
+		if err != nil {
+			fmt.Println(err)
+			schedule.SetError("failed to load rss page")
+			schedule.Update()
+			continue
+
+		}
+
+		defer resp.Body.Close()
+
+		//	html, rerr := ioutil.ReadAll(resp.Body)
+
+		//get header charset if xml encoding does not exists
+		html := io.LimitReader(resp.Body, MAX_MEMORY)
+		enc, _ := htmlindex.Get("windows-1252")
+		tr := enc.NewDecoder().Reader(html)
+		buf := &bytes.Buffer{}
+		_, err := io.Copy(buf, tr)
+		fmt.Println("STRING ", err, buf.String())
+
+		//is it success to write content? yes - update plan_start
 	}
 }
 
 /*
-	fmt.Println("async")
-	ch := make(chan *pbf.Request)
-	go work(ch)
-	for {
-		fmt.Println("1")
-
-		if conn, err := lis.Accept(); err == nil {
-			var buf bytes.Buffer
-			_, err := io.Copy(&buf, conn)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Fatal error: %s", err.Error())
-				os.Exit(1)
-			}
-			pdata := new(pbf.Request)
-			err = proto.Unmarshal(buf.Bytes(), pdata)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Fatal error: %s", err.Error())
-				os.Exit(1)
-			}
-			ch <- pdata
-		}
+func (wr *Worker) HtmlParser(content []byte) {
+	var data struct {
+		Channel []Channel `xml:"channel"`
 	}
 
-
-*/
+	if err := xml.Unmarshal([]byte(content), &data); err != nil {
+		log.Fatal(err)
+	}
+}*/
