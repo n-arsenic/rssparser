@@ -26,6 +26,7 @@ func channelCreate(service *channel.Service) http.Handler {
 			return
 		}
 		//[TODO] form validation inside form custom pkg => NOT NULL FIELD
+		//[TODO] important check url scheme
 		rssurl := req.Form.Get("url")
 
 		rq := &channel.CreateRequest{

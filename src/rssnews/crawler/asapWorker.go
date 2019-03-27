@@ -13,15 +13,15 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"regexp"
 	pbf "rssnews/protonotify"
 	"rssnews/services/scheduler"
-	"strings"
 	"time"
 )
 
 const (
 	port       = ":50051"
-	MAX_MEMORY = 5 * 1024
+	MAX_MEMORY = 1 * 1024 //max requested content length
 )
 
 type (
@@ -77,7 +77,9 @@ func (wr *Worker) Work(ch chan scheduler.Service) {
 	for {
 		//condition for close channel
 		schedule := <-ch
-		resp, err := http.Get(schedule.Rss_url) //write to temporary file - bounds of memory
+
+		var content string
+		resp, err := http.Get(schedule.Rss_url)
 		if err != nil {
 			fmt.Println(err)
 			schedule.SetError("failed to load rss page")
@@ -88,15 +90,30 @@ func (wr *Worker) Work(ch chan scheduler.Service) {
 
 		defer resp.Body.Close()
 
-		//	html, rerr := ioutil.ReadAll(resp.Body)
+		limReader := io.LimitReader(resp.Body, MAX_MEMORY)
+		buff := bytes.NewBuffer([]byte{})
+		_, ierr := io.Copy(buff, limReader)
+		content = buff.String()
 
-		//get header charset if xml encoding does not exists
-		html := io.LimitReader(resp.Body, MAX_MEMORY)
-		enc, _ := htmlindex.Get("windows-1252")
-		tr := enc.NewDecoder().Reader(html)
-		buf := &bytes.Buffer{}
-		_, err := io.Copy(buf, tr)
-		fmt.Println("STRING ", err, buf.String())
+		fmt.Println(ierr, content)
+
+		reg, _ := regexp.Compile(`xml[\s]+version.+encoding="([a-zA-Z0-9\-:]+)"`)
+		match := reg.FindStringSubmatch(content)
+
+		if len(match) > 1 {
+			charset := match[1]
+			enc, err := htmlindex.Get(charset)
+
+			fmt.Println(err)
+
+			bufReader := bytes.NewReader(buff.Bytes())
+			encReader := enc.NewDecoder().Reader(bufReader)
+			buf := &bytes.Buffer{}
+			_, ioerr := io.Copy(buf, encReader)
+			content = buf.String()
+
+			fmt.Println(ioerr, content)
+		}
 
 		//is it success to write content? yes - update plan_start
 	}

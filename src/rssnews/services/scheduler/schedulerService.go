@@ -66,7 +66,7 @@ func (sche *Service) Update() error {
 	defer services.Postgre.Close()
 	services.Postgre.Connect()
 
-	_, err := sq.Update("scheduler").
+	data, err := sq.Update("scheduler").
 		SetMap(sq.Eq{
 			"status":  sche.Status,
 			"message": sche.Message,
@@ -75,9 +75,8 @@ func (sche *Service) Update() error {
 		}).
 		Where("channel_id = ?", sche.Channel_id).
 		Exec()
-
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println(err, data)
 	}
 	return err
 }
