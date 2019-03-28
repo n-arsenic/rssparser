@@ -13,9 +13,11 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS channels(
 	id          serial      PRIMARY KEY,
 	rss_url     TEXT        NOT NULL,
-	description TEXT, 
-	pub_date    TIMESTAMP   NOT NULL,
-	created_at  TIMESTAMP   NOT NULL,
+	description TEXT,
+        title       TEXT,
+	link        TEXT,	
+	pub_date    TIMESTAMP,
+	created_at  TIMESTAMP   DEFAULT now() NOT NULL,
 
 	UNIQUE (rss_url)
 );
@@ -34,6 +36,8 @@ CREATE TABLE IF NOT EXISTS channel_content(
 	channel_id  INTEGER   NOT NULL,
 	link        TEXT,
 	title       TEXT,
+	author      TEXT,
+	category    TEXT,
 	description TEXT      NOT NULL,
 	pub_date    TIMESTAMP NOT NULL,
 
