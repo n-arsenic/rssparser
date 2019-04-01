@@ -14,7 +14,10 @@ import (
 	"net"
 	"net/http"
 	//	"regexp"
+	"rssnews/crawler"
+	"rssnews/entity"
 	pbf "rssnews/protonotify"
+	"rssnews/services/channel"
 	"rssnews/services/scheduler"
 	"time"
 )
@@ -83,44 +86,36 @@ func (wr *Worker) Work(ch chan scheduler.Service) {
 			schedule.SetError("failed to load rss page")
 			schedule.Update()
 			continue
-
 		}
 
 		defer resp.Body.Close()
 
-		wr.XMLParser(resp.Body)
+		var result *crawler.Rss = wr.XMLParser(resp.Body)
 
-		//is it success to write content? yes - update plan_start
+		var chnlEnt *entity.Channel = new(entity.Channel)
+		var chnl *channel.Service = new(channel.Service)
+		var chanlCont *ContentService = new(channel.ContentService)
+
+		chnlEnt.Title = result.Channel.Title
+		chnlEnt.Link = result.Channel.Link
+		chnlEnt.Description = result.Channel.Description
+		chnlEnt.Pub_date = result.Channel.Pub_date
+
+		chnl.Update(chnlEnt)
+		chanlCont.Create(result.Channel.Item, schedule.Channel_id)
+		//	schedule.Status =
+		//	schedule.Finish =
+		//	schedule.Plan_start =
+		schedule.Update()
+
 	}
 }
 
-func (wr *Worker) XMLParser(rbody io.Reader) {
-
-	type (
-		Rss struct {
-			Channel struct {
-				Title       string `xml:"title"`
-				Link        string `xml:"link`
-				Description string `xml:"description"`
-				PubDate     string `xml:"pubDate"`
-				Item        []struct {
-					Title       string `xml:"title"`
-					Link        string `xml:"link`
-					Description string `xml:"description"`
-					Author      string `xml:"author"`
-					Category    string `xml:"category"`
-					PubDate     string `xml:"pubDate"`
-				} `xml:"item"`
-			} `xml:"channel"`
-		}
-	)
-
-	result := &Rss{}
-
+func (wr *Worker) XMLParser(rbody io.Reader) *crawler.Rss {
+	result := &crawler.Rss{}
 	limReader := io.LimitReader(rbody, MAX_MEMORY)
 	buff := bytes.NewBuffer([]byte{})
 	_, ierr := io.Copy(buff, limReader)
-
 	xdec := xml.NewDecoder(bytes.NewReader(buff.Bytes()))
 	xdec.CharsetReader = identReader
 
@@ -130,7 +125,7 @@ func (wr *Worker) XMLParser(rbody io.Reader) {
 		log.Fatal(err)
 	}
 
-	fmt.Println("Result", result)
+	return result
 }
 
 func identReader(encoding string, input io.Reader) (io.Reader, error) {

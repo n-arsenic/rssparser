@@ -41,8 +41,6 @@ CREATE TABLE IF NOT EXISTS channel_content(
 	description TEXT      NOT NULL,
 	pub_date    TIMESTAMP NOT NULL,
 
-	PRIMARY KEY (channel_id),
-
 	FOREIGN KEY (channel_id)       REFERENCES channels(id)    ON DELETE CASCADE
 );
 

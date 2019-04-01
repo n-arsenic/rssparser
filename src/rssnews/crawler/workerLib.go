@@ -1,13 +1,28 @@
 package crawler
 
-import (
-	"fmt"
-	"rssnews/entity"
-	//"log"
-	//"net/http"
-	"time"
+import ()
+
+type (
+	RssItem struct {
+		Title       string `xml:"title"`
+		Link        string `xml:"link`
+		Description string `xml:"description"`
+		Author      string `xml:"author"`
+		Category    string `xml:"category"`
+		PubDate     string `xml:"pubDate"`
+	}
+	Rss struct {
+		Channel struct {
+			Title       string    `xml:"title"`
+			Link        string    `xml:"link`
+			Description string    `xml:"description"`
+			PubDate     string    `xml:"pubDate"`
+			Item        []RssItem `xml:"item"`
+		} `xml:"channel"`
+	}
 )
 
+/*
 type (
 	Worker struct {
 		DB_Object entity.Channel
@@ -54,3 +69,4 @@ func (w *Worker) Execute(requestChan chan chan entity.Channel) {
 		//	close(responseChan)
 	}
 }
+*/
