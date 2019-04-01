@@ -24,7 +24,6 @@ func (channelService *Service) sendNotifyEvent(ent entity.Channel) {
 	if err != nil {
 		//log.Fatalf("Couldn't connect: %v", err)
 		fmt.Printf("Couldn't connect: %v", err)
-
 	}
 	defer conn.Close()
 	fmt.Println("init client")
@@ -35,7 +34,7 @@ func (channelService *Service) sendNotifyEvent(ent entity.Channel) {
 	resp, err := asapcli.InsertNotify(context.Background(), &pbf.Request{Id: int32(ent.Id), Url: ent.Rss_url})
 	if err != nil {
 		//	log.Fatalf("could not send notify: %v", err)
-		fmt.Printf("could not send notify: %v", err)
+		fmt.Printf("could not send notify: %v", err) //panic error
 	}
 	fmt.Printf("Get: %s\n", resp.Received)
 }
@@ -49,6 +48,7 @@ func (channelService *Service) Create(rq *CreateRequest) *CreateResponse {
 	var _err error
 
 	chanl.Rss_url = rq.Url
+
 	//check unic rows
 	selQuery := sq.Select("id").
 		From("channels").
@@ -59,7 +59,6 @@ func (channelService *Service) Create(rq *CreateRequest) *CreateResponse {
 
 	_err = selQuery.Scan(&chanl.Id)
 
-	//убрать селект - инсерт + обработка уникальности - если создано то селект и return
 	if _err == sql.ErrNoRows {
 		query := sq.
 			Insert("channels").
@@ -70,7 +69,6 @@ func (channelService *Service) Create(rq *CreateRequest) *CreateResponse {
 			PlaceholderFormat(sq.Dollar)
 
 		_err = query.QueryRow().Scan(&chanl.Id, &chanl.Rss_url)
-
 	}
 
 	if _err != nil && _err != sql.ErrNoRows {
@@ -103,10 +101,41 @@ func (channelService *Service) Create(rq *CreateRequest) *CreateResponse {
 
 	response.Id = chanl.Id
 
-	channelService.sendNotifyEvent(chanl)
+	//check if channel already parsed
+	_, _err = sq.Select("channel_id").
+		From("scheduler").
+		Where("channel_id = ?", chanl.Id).
+		RunWith(services.Postgre.Db).
+		PlaceholderFormat(sq.Dollar).
+		Exec()
 
+	if _err == nil {
+		//send event to asap worker
+		channelService.sendNotifyEvent(chanl)
+	} else {
+		fmt.Println("Scheduler select ", _err)
+	}
 	return response
 
+}
+
+func (channelService *Service) Update(ent *entity.Channel) {
+	defer services.Postgre.Close()
+	services.Postgre.Connect()
+	_, err := sq.Update("channels").
+		SetMap(sq.Eq{
+			"title":       ent.Title,
+			"link":        ent.Link,
+			"description": ent.Description,
+			"pub_date":    ent.Pub_date,
+		}).
+		Where("id = ?", ent.Id).
+		RunWith(services.Postgre.Db).
+		PlaceholderFormat(sq.Dollar).
+		Exec()
+	if err != nil {
+		fmt.Println("Update of channel is failed: ", err)
+	}
 }
 
 func (channelService *Service) ReadMany(rq *ReadManyRequest) *ReadManyResponse {

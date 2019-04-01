@@ -1,5 +1,6 @@
 package crawler
 
+/*
 import (
 	//	"database/sql"
 	"fmt"
@@ -125,4 +126,4 @@ func New(config Config) *Service {
 		panic("Wrong time limits format")
 	}
 	return service
-}
+}*/

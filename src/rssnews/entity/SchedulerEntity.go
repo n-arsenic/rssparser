@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"fmt"
 	"github.com/lib/pq"
 	"time"
 )
@@ -48,5 +49,16 @@ func (sh *Scheduler) SetSuccessStatus() {
 func (sh *Scheduler) SetError(mess string) {
 	sh.Status = sh.GetErrorStatus()
 	sh.Message = mess
+	sh.SetFinish()
+}
+
+func (sh *Scheduler) SetFinish() {
 	sh.Finish = pq.NullTime{Time: time.Now(), Valid: true}
+}
+
+func (sh *Scheduler) SetPlanStart(period time.Duration) {
+	date := time.Now().Add(time.Duration(period))
+	sh.Plan_start = pq.NullTime{Time: date, Valid: true}
+	fmt.Println("sh.Plan_start !!!!!! ", sh.Plan_start)
+
 }

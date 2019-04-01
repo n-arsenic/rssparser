@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	//	"regexp"
+	"database/sql"
 	"rssnews/crawler"
 	"rssnews/entity"
 	pbf "rssnews/protonotify"
@@ -94,18 +95,31 @@ func (wr *Worker) Work(ch chan scheduler.Service) {
 
 		var chnlEnt *entity.Channel = new(entity.Channel)
 		var chnl *channel.Service = new(channel.Service)
-		var chanlCont *ContentService = new(channel.ContentService)
+		var chanlCont *channel.ContentService = new(channel.ContentService)
 
+		chnlEnt.Id = schedule.Channel_id
 		chnlEnt.Title = result.Channel.Title
 		chnlEnt.Link = result.Channel.Link
-		chnlEnt.Description = result.Channel.Description
-		chnlEnt.Pub_date = result.Channel.Pub_date
+		chnlEnt.Description = sql.NullString{
+			String: result.Channel.Description,
+			Valid:  true,
+		}
+		pubDate, _ := time.Parse(time.RFC1123Z, result.Channel.PubDate)
+		chnlEnt.Pub_date = pq.NullTime{
+			Time:  pubDate,
+			Valid: true,
+		}
 
 		chnl.Update(chnlEnt)
-		chanlCont.Create(result.Channel.Item, schedule.Channel_id)
-		//	schedule.Status =
-		//	schedule.Finish =
-		//	schedule.Plan_start =
+		cerr := chanlCont.Create(result.Channel.Item, schedule.Channel_id)
+
+		if cerr != nil {
+			schedule.SetError(cerr.Error())
+		} else {
+			schedule.SetSuccessStatus()
+			schedule.SetFinish()
+		}
+		schedule.SetPlanStart(scheduler.PARSE_PERIOD)
 		schedule.Update()
 
 	}
@@ -131,6 +145,8 @@ func (wr *Worker) XMLParser(rbody io.Reader) *crawler.Rss {
 func identReader(encoding string, input io.Reader) (io.Reader, error) {
 	enc, err := htmlindex.Get(encoding)
 	encReader := enc.NewDecoder().Reader(input)
-	fmt.Println("ident err", err)
+	if err != nil {
+		fmt.Println("ident err", err)
+	}
 	return encReader, err
 }

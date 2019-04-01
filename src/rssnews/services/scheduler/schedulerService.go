@@ -8,22 +8,16 @@ import (
 	"rssnews/entity"
 	"rssnews/services"
 	"strings"
-	//	"time"
+	"time"
 )
 
+//future rss parsing
+const PARSE_PERIOD = 3 * time.Hour
+
 type (
-	Config struct {
-		Create_limit  string
-		Start_limit   string
-		Success_limit string
-	}
 	Service struct {
 		entity.Scheduler
 		Exists bool
-		//	Config
-		//	StTimeLim time.Time
-		//	CrTimeLim time.Time
-		//	SuTimeLim time.Time
 	}
 )
 
@@ -66,17 +60,20 @@ func (sche *Service) Update() error {
 	defer services.Postgre.Close()
 	services.Postgre.Connect()
 
-	data, err := sq.Update("scheduler").
+	_, err := sq.Update("scheduler").
 		SetMap(sq.Eq{
-			"status":  sche.Status,
-			"message": sche.Message,
-			"start":   sche.Start,
-			"finish":  sche.Finish,
+			"status":     sche.Status,
+			"message":    sche.Message,
+			"start":      sche.Start,
+			"finish":     sche.Finish,
+			"plan_start": sche.Plan_start,
 		}).
 		Where("channel_id = ?", sche.Channel_id).
+		RunWith(services.Postgre.Db).
+		PlaceholderFormat(sq.Dollar).
 		Exec()
 	if err != nil {
-		fmt.Println(err, data)
+		fmt.Println("Scheduler update failed: ", err)
 	}
 	return err
 }

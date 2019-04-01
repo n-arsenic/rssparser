@@ -9,6 +9,8 @@ import (
 type Channel struct {
 	Id          int
 	Rss_url     string
+	Link        string
+	Title       string
 	Description sql.NullString
 	Pub_date    pq.NullTime
 	Created_at  time.Time
