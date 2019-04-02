@@ -1,7 +1,6 @@
 package entity
 
 import (
-	"fmt"
 	"github.com/lib/pq"
 	"time"
 )

@@ -1,10 +1,12 @@
 package scheduler
 
 import (
-	//	"database/sql"
+	"errors"
 	"fmt"
 	sq "github.com/Masterminds/squirrel"
 	"github.com/lib/pq"
+	"reflect"
+	"rssnews/crawler"
 	"rssnews/entity"
 	"rssnews/services"
 	"strings"
@@ -12,7 +14,6 @@ import (
 )
 
 //future rss parsing
-const PARSE_PERIOD = 3 * time.Hour
 
 type (
 	Service struct {
@@ -78,40 +79,38 @@ func (sche *Service) Update() error {
 	return err
 }
 
-/*
-func (crawlService *Service) ReadMany() ([]entity.Channel, error) {
+func (sche *Service) ReadMany() ([]entity.Scheduler, error) {
 	defer services.Postgre.Close()
 	services.Postgre.Connect()
 
 	var (
-		chanl    *entity.Channel = new(entity.Channel)
-		channels []entity.Channel
-		chanVal  reflect.Value = reflect.ValueOf(chanl).Elem()
-		_err     error
+		scheduler    *entity.Scheduler = &sche.Scheduler
+		schedulers   []entity.Scheduler
+		schedulerVal reflect.Value = reflect.ValueOf(scheduler).Elem()
+		now                        = time.Now()
+		timeLimit                  = now.Add(-time.Duration(crawler.WORK_LIMIT))
+		_err         error
 	)
 
-	nn, val, er := sq.Select("*").
-		From("channels").
+	rows, _err := sq.Select("*").
+		From("scheduler").
 		Where(sq.Or{
 			sq.And{
-				sq.Eq{"status": chanl.GetNewStatus()},
-				sq.LtOrEq{"created_at": crawlService.CrTimeLim}},
+				sq.Eq{"status": scheduler.GetSuccessStatus()},
+				sq.LtOrEq{"plan_start": now}},
 			sq.And{
-				sq.Eq{"status": chanl.GetSuccessStatus()},
-				sq.LtOrEq{"parsed_at": crawlService.SuTimeLim}},
-			sq.And{
-				sq.Eq{"status": chanl.GetWaitStatus()},
-				sq.LtOrEq{"start_parse": crawlService.StTimeLim}}}).
+				sq.Eq{"status": scheduler.GetWorkStatus()},
+				sq.LtOrEq{"start": timeLimit}}}).
 		RunWith(services.Postgre.Db).
-		PlaceholderFormat(sq.Dollar).ToSql()
-	fmt.Println(nn, val, er)
+		PlaceholderFormat(sq.Dollar).
+		Query()
 
 	if _err == nil {
 		columns, _ := rows.ColumnTypes() //rows.Columns()
 		pointers := make([]interface{}, len(columns))
 
 		for i, column := range columns {
-			fieldVal := chanVal.FieldByName(strings.Title(column.Name()))
+			fieldVal := schedulerVal.FieldByName(strings.Title(column.Name()))
 			if fieldVal.IsValid() {
 				pointers[i] = fieldVal.Addr().Interface()
 			} else {
@@ -124,50 +123,10 @@ func (crawlService *Service) ReadMany() ([]entity.Channel, error) {
 			_err = rows.Scan(pointers...)
 			if _err == nil {
 				//	fmt.Println(chanl)
-				channels = append(channels, *chanl)
+				schedulers = append(schedulers, *scheduler)
 			}
 
 		}
 	}
-	return channels, _err
+	return schedulers, _err
 }
-
-func (crawlService *Service) setTimeLimits() error {
-	var past time.Time
-	var _err error
-	past, _err = getPastDate(crawlService.Create_limit)
-	if _err == nil {
-		crawlService.CrTimeLim = past
-	}
-	past, _err = getPastDate(crawlService.Success_limit)
-	if _err == nil {
-		crawlService.SuTimeLim = past
-	}
-	past, _err = getPastDate(crawlService.Start_limit)
-	if _err == nil {
-		crawlService.StTimeLim = past
-	}
-
-	return _err
-}
-
-func getPastDate(durString string) (time.Time, error) {
-	var past time.Time
-	dur, err := time.ParseDuration(durString)
-	if err == nil {
-		now := time.Now()
-		past = now.Add(-dur)
-	}
-
-	return past, err
-}
-
-func New(config Config) *Service {
-	service := &Service{Config: config}
-	_err := service.setTimeLimits()
-	if _err != nil {
-		panic("Wrong time limits format")
-	}
-	return service
-}
-*/
