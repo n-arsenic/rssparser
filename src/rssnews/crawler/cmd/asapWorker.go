@@ -1,15 +1,11 @@
 package main
 
 import (
-	"bytes"
-	"encoding/xml"
 	"fmt"
 	"github.com/lib/pq"
 	"golang.org/x/net/context"
-	"golang.org/x/text/encoding/htmlindex"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -24,16 +20,13 @@ import (
 )
 
 const (
-	port       = ":50051"
-	MAX_MEMORY = 1024 * 1024 //max requested content length
+	port = ":50051"
 )
 
 type (
 	Server struct {
 		Ch chan scheduler.Service
 	}
-
-	Worker struct{}
 )
 
 func (srv *Server) InsertNotify(ctx context.Context, req *pbf.Request) (*pbf.Response, error) {
@@ -62,9 +55,8 @@ func main() {
 	srv := grpc.NewServer()
 	srvLocal := new(Server)
 	srvLocal.Ch = make(chan scheduler.Service)
-	worker := new(Worker)
 
-	go worker.Work(srvLocal.Ch)
+	go Work(srvLocal.Ch)
 
 	pbf.RegisterAsapWorkerServer(srv, srvLocal)
 	reflection.Register(srv)
@@ -75,7 +67,7 @@ func main() {
 }
 
 //[TODO] allocate this to another pkg
-func (wr *Worker) Work(ch chan scheduler.Service) {
+func Work(ch chan scheduler.Service) {
 	fmt.Println("init work")
 	for {
 		//condition for close channel
@@ -91,7 +83,7 @@ func (wr *Worker) Work(ch chan scheduler.Service) {
 
 		defer resp.Body.Close()
 
-		var result *crawler.Rss = wr.XMLParser(resp.Body)
+		var result *crawler.Rss = crawler.XMLParser(resp.Body)
 
 		var chnlEnt *entity.Channel = new(entity.Channel)
 		var chnl *channel.Service = new(channel.Service)
@@ -119,34 +111,8 @@ func (wr *Worker) Work(ch chan scheduler.Service) {
 			schedule.SetSuccessStatus()
 			schedule.SetFinish()
 		}
-		schedule.SetPlanStart(scheduler.PARSE_PERIOD)
+		schedule.SetPlanStart(crawler.PARSE_PERIOD)
 		schedule.Update()
 
 	}
-}
-
-func (wr *Worker) XMLParser(rbody io.Reader) *crawler.Rss {
-	result := &crawler.Rss{}
-	limReader := io.LimitReader(rbody, MAX_MEMORY)
-	buff := bytes.NewBuffer([]byte{})
-	_, ierr := io.Copy(buff, limReader)
-	xdec := xml.NewDecoder(bytes.NewReader(buff.Bytes()))
-	xdec.CharsetReader = identReader
-
-	fmt.Println(ierr)
-
-	if err := xdec.Decode(result); err != nil {
-		log.Fatal(err)
-	}
-
-	return result
-}
-
-func identReader(encoding string, input io.Reader) (io.Reader, error) {
-	enc, err := htmlindex.Get(encoding)
-	encReader := enc.NewDecoder().Reader(input)
-	if err != nil {
-		fmt.Println("ident err", err)
-	}
-	return encReader, err
 }

@@ -59,6 +59,4 @@ func (sh *Scheduler) SetFinish() {
 func (sh *Scheduler) SetPlanStart(period time.Duration) {
 	date := time.Now().Add(time.Duration(period))
 	sh.Plan_start = pq.NullTime{Time: date, Valid: true}
-	fmt.Println("sh.Plan_start !!!!!! ", sh.Plan_start)
-
 }
