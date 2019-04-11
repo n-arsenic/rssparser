@@ -20,6 +20,6 @@ func init() {
 func Compose() {
 	userServ := user.NewUserService()
 	UserHandlerBind(userServ)
-	chanlServ := channel.NewChanlService()
+	chanlServ := channel.New()
 	ChanlHandlerBind(chanlServ)
 }

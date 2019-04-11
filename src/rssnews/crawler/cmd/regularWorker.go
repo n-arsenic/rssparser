@@ -3,28 +3,31 @@ package main
 import (
 	"fmt"
 	"rssnews/crawler"
-	"rssnews/entity"
 	"rssnews/services/scheduler"
 	"runtime"
-	"time"
+	"sync"
 )
 
-type ()
-
 func main() {
-	var top int = 0
-	var bottom int = 0
+	fmt.Println("regular worker is ready...")
+	var (
+		wg     sync.WaitGroup
+		top    int = 0
+		bottom int = 0
+	)
 	schedul := new(scheduler.Service)
-	tasks, err := schedul.ReadMany()
+	tasks, err := schedul.ReadMany(crawler.WORK_LIMIT)
 	taskLen := len(tasks)
 
 	if taskLen == 0 {
 		if err != nil {
 			fmt.Println("Load tasks failed", err)
+		} else {
+			fmt.Println("There is no tasks")
 		}
 		return
 	}
-	requestChan := make(chan entity.Scheduler)
+	requestChan := make(chan scheduler.Service)
 
 	if taskLen > crawler.MAX_ROUTINES {
 		top = crawler.MAX_ROUTINES
@@ -35,7 +38,11 @@ func main() {
 	for taskLen > bottom {
 		taskSl := tasks[bottom:top]
 		for _, task := range taskSl {
-			go work(requestChan)
+			wg.Add(1)
+			go func() {
+				crawler.Work(requestChan)
+				wg.Done()
+			}()
 			requestChan <- task
 		}
 		bottom = top
@@ -46,10 +53,6 @@ func main() {
 			top += reserv
 		}
 	}
-	time.Sleep(10 * time.Second)
-}
-
-func work(requestChan chan entity.Scheduler) {
-	ent := <-requestChan
-	fmt.Println(ent.Channel_id)
+	wg.Wait()
+	fmt.Println("Main flow complete")
 }

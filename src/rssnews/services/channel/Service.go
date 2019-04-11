@@ -49,6 +49,8 @@ type (
 	RssList struct {
 		Id          int
 		Url         string
+		Link        string
+		Title       string
 		Description string
 		Pub_date    time.Time
 	}

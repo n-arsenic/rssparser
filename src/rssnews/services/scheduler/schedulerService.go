@@ -4,29 +4,22 @@ import (
 	"errors"
 	"fmt"
 	sq "github.com/Masterminds/squirrel"
-	"github.com/lib/pq"
 	"reflect"
-	"rssnews/crawler"
 	"rssnews/entity"
 	"rssnews/services"
 	"strings"
 	"time"
 )
 
-//future rss parsing
-
 type (
 	Service struct {
 		entity.Scheduler
-		Exists bool
 	}
 )
 
 func (sche *Service) Create() error {
 	defer services.Postgre.Close()
 	services.Postgre.Connect()
-
-	sche.Exists = false
 
 	query := sq.
 		Insert("scheduler").
@@ -42,19 +35,20 @@ func (sche *Service) Create() error {
 		&sche.Start,
 		&sche.Status,
 	)
+	/*
+		if _err != nil {
+			if err, ok := _err.(*pq.Error); ok {
+				//Duplicate key
+				if strings.Compare(string(err.Code), "23505") == 0 {
+					return nil
+				}
 
-	if _err != nil {
-		if err, ok := _err.(*pq.Error); ok {
-			if strings.Compare(string(err.Code), "23505") == 0 {
-				return nil
 			}
-
+			fmt.Println(_err)
+			return _err
 		}
-		fmt.Println(_err)
-		return _err
-	}
-	sche.Exists = true
-	return nil
+	*/
+	return _err
 }
 
 func (sche *Service) Update() error {
@@ -79,21 +73,24 @@ func (sche *Service) Update() error {
 	return err
 }
 
-func (sche *Service) ReadMany() ([]entity.Scheduler, error) {
+func (sche *Service) ReadMany(tl time.Duration) ([]Service, error) {
 	defer services.Postgre.Close()
 	services.Postgre.Connect()
 
 	var (
 		scheduler    *entity.Scheduler = &sche.Scheduler
-		schedulers   []entity.Scheduler
+		schedulers   []Service
 		schedulerVal reflect.Value = reflect.ValueOf(scheduler).Elem()
 		now                        = time.Now()
-		timeLimit                  = now.Add(-time.Duration(crawler.WORK_LIMIT))
+		timeLimit                  = now.Add(-tl) //-time.Duration(tl))
 		_err         error
 	)
 
-	rows, _err := sq.Select("*").
-		From("scheduler").
+	rows, _err := sq.Update("scheduler").
+		SetMap(sq.Eq{
+			"status": scheduler.GetWorkStatus(),
+			"start":  now,
+		}).
 		Where(sq.Or{
 			sq.And{
 				sq.Eq{"status": scheduler.GetSuccessStatus()},
@@ -101,10 +98,25 @@ func (sche *Service) ReadMany() ([]entity.Scheduler, error) {
 			sq.And{
 				sq.Eq{"status": scheduler.GetWorkStatus()},
 				sq.LtOrEq{"start": timeLimit}}}).
+		Suffix("RETURNING *").
 		RunWith(services.Postgre.Db).
 		PlaceholderFormat(sq.Dollar).
 		Query()
 
+		/*
+			rows, _err := sq.Select("*").
+				From("scheduler").
+				Where(sq.Or{
+					sq.And{
+						sq.Eq{"status": scheduler.GetSuccessStatus()},
+						sq.LtOrEq{"plan_start": now}},
+					sq.And{
+						sq.Eq{"status": scheduler.GetWorkStatus()},
+						sq.LtOrEq{"start": timeLimit}}}).
+				RunWith(services.Postgre.Db).
+				PlaceholderFormat(sq.Dollar).
+				Query()
+		*/
 	if _err == nil {
 		columns, _ := rows.ColumnTypes() //rows.Columns()
 		pointers := make([]interface{}, len(columns))
@@ -119,14 +131,12 @@ func (sche *Service) ReadMany() ([]entity.Scheduler, error) {
 			}
 		}
 		for rows.Next() {
-
 			_err = rows.Scan(pointers...)
 			if _err == nil {
-				//	fmt.Println(chanl)
-				schedulers = append(schedulers, *scheduler)
+				schedulers = append(schedulers, *sche)
 			}
-
 		}
 	}
+
 	return schedulers, _err
 }

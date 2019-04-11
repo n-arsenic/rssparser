@@ -10,14 +10,18 @@ import (
 	"rssnews/entity"
 	"rssnews/services"
 	//	"log"
+	"github.com/lib/pq"
 	pbf "rssnews/protonotify"
+	"time"
 )
 
 const (
 	host = "localhost:50051"
 )
 
-type Service struct{}
+type Service struct {
+	entity.Channel
+}
 
 func (channelService *Service) sendNotifyEvent(ent entity.Channel) {
 	conn, err := grpc.Dial(host, grpc.WithInsecure())
@@ -69,6 +73,11 @@ func (channelService *Service) Create(rq *CreateRequest) *CreateResponse {
 			PlaceholderFormat(sq.Dollar)
 
 		_err = query.QueryRow().Scan(&chanl.Id, &chanl.Rss_url)
+
+		if _err == nil {
+			//send event to asap worker
+			channelService.sendNotifyEvent(chanl)
+		}
 	}
 
 	if _err != nil && _err != sql.ErrNoRows {
@@ -101,38 +110,48 @@ func (channelService *Service) Create(rq *CreateRequest) *CreateResponse {
 
 	response.Id = chanl.Id
 
-	//check if channel already parsed
-	_, _err = sq.Select("channel_id").
-		From("scheduler").
-		Where("channel_id = ?", chanl.Id).
-		RunWith(services.Postgre.Db).
-		PlaceholderFormat(sq.Dollar).
-		Exec()
-
-	if _err == nil {
-		//send event to asap worker
-		channelService.sendNotifyEvent(chanl)
-	} else {
-		fmt.Println("Scheduler select ", _err)
-	}
+	//TODO it is nesessary write sheduler task here!!
 	return response
 
 }
 
-func (channelService *Service) Update(ent *entity.Channel) {
+func (channelService *Service) UpdatePubDate(date time.Time, chid int) {
 	defer services.Postgre.Close()
 	services.Postgre.Connect()
+	pubDate := pq.NullTime{
+		Time:  date,
+		Valid: true,
+	}
+
 	_, err := sq.Update("channels").
 		SetMap(sq.Eq{
-			"title":       ent.Title,
-			"link":        ent.Link,
-			"description": ent.Description,
-			"pub_date":    ent.Pub_date,
+			"pub_date": pubDate,
 		}).
-		Where("id = ?", ent.Id).
+		Where("id = ?", chid).
 		RunWith(services.Postgre.Db).
 		PlaceholderFormat(sq.Dollar).
 		Exec()
+	if err != nil {
+		fmt.Println("Update pub date of channel is failed: ", err)
+	}
+}
+
+//update with embedded data
+func (chanl *Service) Update() {
+	defer services.Postgre.Close()
+	services.Postgre.Connect()
+	data, err := sq.Update("channels").
+		SetMap(sq.Eq{
+			"title":       chanl.Title,
+			"link":        chanl.Link,
+			"description": chanl.Description,
+			"pub_date":    chanl.Pub_date,
+		}).
+		Where("id = ?", chanl.Id).
+		RunWith(services.Postgre.Db).
+		PlaceholderFormat(sq.Dollar).
+		Exec()
+	fmt.Printf("%v\n", data)
 	if err != nil {
 		fmt.Println("Update of channel is failed: ", err)
 	}
@@ -144,8 +163,14 @@ func (channelService *Service) ReadMany(rq *ReadManyRequest) *ReadManyResponse {
 
 	var response *ReadManyResponse = &ReadManyResponse{}
 
-	rows, _err := sq.Select("ch.id", "ch.rss_url", "ch.description", "ch.pub_date").
-		From("channels AS ch").
+	rows, _err := sq.Select(
+		"ch.id",
+		"ch.rss_url",
+		"ch.link",
+		"ch.title",
+		"ch.description",
+		"ch.pub_date",
+	).From("channels AS ch").
 		Join("user_channels AS uch ON uch.channel_id = ch.id").
 		Where("uch.user_id = ?", rq.User_id).
 		RunWith(services.Postgre.Db).
@@ -166,6 +191,8 @@ func (channelService *Service) ReadMany(rq *ReadManyRequest) *ReadManyResponse {
 		_resErr := rows.Scan(
 			&chanl.Id,
 			&chanl.Rss_url,
+			&chanl.Link,
+			&chanl.Title,
 			&chanl.Description,
 			&chanl.Pub_date,
 		)
@@ -173,6 +200,8 @@ func (channelService *Service) ReadMany(rq *ReadManyRequest) *ReadManyResponse {
 			response.Channels = append(response.Channels, RssList{
 				Id:          chanl.Id,
 				Url:         chanl.Rss_url,
+				Title:       chanl.Title.String,
+				Link:        chanl.Link.String,
 				Description: chanl.Description.String,
 				Pub_date:    chanl.Pub_date.Time,
 			})
@@ -214,19 +243,30 @@ func (channelService *Service) ReadOne(rq *ReadOneRequest) *ReadOneResponse {
 		response.Err_message = "Error get channel info"
 		return response
 	}
-	rows, _err := sq.Select("link", "title", "description", "pub_date").
-		From("channel_content").
+	rows, _err := sq.Select(
+		"channel_id",
+		"link",
+		"title",
+		"author",
+		"category",
+		"description",
+		"pub_date",
+	).From("channel_content").
 		Where("channel_id = ?", rq.Channel_id).
 		RunWith(services.Postgre.Db).
 		PlaceholderFormat(sq.Dollar).
 		Query()
-		//[TODO] if scheduler has error - print it
+
+	//[TODO] if scheduler has error - print it
 	for rows.Next() {
 		var content *entity.ChannelContent = new(entity.ChannelContent)
 
-		_err = query.Scan(
+		_err = rows.Scan(
+			&content.Channel_id,
 			&content.Link,
 			&content.Title,
+			&content.Author,
+			&content.Category,
 			&content.Description,
 			&content.Pub_date,
 		)
@@ -243,6 +283,42 @@ func (channelService *Service) ReadOne(rq *ReadOneRequest) *ReadOneResponse {
 	return response
 }
 
-func NewChanlService() *Service {
-	return &Service{}
+func New(id ...int) *Service {
+	defer services.Postgre.Close()
+	services.Postgre.Connect()
+	var chanl *Service = &Service{}
+
+	if (len(id) == 0) || len(id) > 1 {
+		return chanl
+	}
+
+	query := sq.Select(
+		"id",
+		"rss_url",
+		"link",
+		"title",
+		"description",
+		"pub_date",
+		"created_at",
+	).
+		From("channels").
+		Where("id = ?", id[0]).
+		RunWith(services.Postgre.Db).
+		PlaceholderFormat(sq.Dollar).
+		QueryRow()
+
+	_err := query.Scan(
+		&chanl.Id,
+		&chanl.Rss_url,
+		&chanl.Link,
+		&chanl.Title,
+		&chanl.Description,
+		&chanl.Pub_date,
+		&chanl.Created_at,
+	)
+
+	if _err != nil {
+		fmt.Println("Error of creation channel with data: ", _err)
+	}
+	return chanl
 }
