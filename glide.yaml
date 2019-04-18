@@ -1,0 +1,28 @@
+package: rssparser
+ignore:
+- rssparser/internal/protonotify
+import:
+- package: github.com/Masterminds/squirrel
+- package: github.com/golang/protobuf
+  subpackages:
+  - proto
+- package: github.com/gorilla/Sessions
+- package: github.com/gorilla/securecookie
+- package: github.com/lib/pq
+- package: github.com/pkg/errors
+- package: golang.org/x/crypto
+  subpackages:
+  - bcrypt
+- package: golang.org/x/net
+  subpackages:
+  - context
+- package: golang.org/x/text
+  subpackages:
+  - encoding/htmlindex
+- package: google.golang.org/grpc
+  subpackages:
+  - codes
+  - reflection
+  - status
+- package: github.com/joho/godotenv
+  version: ^1.3.0

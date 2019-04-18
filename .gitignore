@@ -1,3 +1,6 @@
 .DS_Store
 /src/rssnews/services/BaseDB.go
 *.swp
+.env
+/vendor/*
+glide.lock
